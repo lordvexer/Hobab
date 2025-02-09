@@ -43,8 +43,12 @@ class GoldMarketApp(QMainWindow):
         # نمایش قیمت‌ها
         self.gold_price_label = QLabel("طلای 18 عیار: در حال دریافت ...")
         self.coin_price_label = QLabel("سکه امامی: در حال دریافت ...")
+        self.euro_price_label = QLabel("یورو: در حال دریافت ...")
+        self.dollar_price_label = QLabel("دلار: در حال دریافت ...")
         self.layout.addWidget(self.gold_price_label)
         self.layout.addWidget(self.coin_price_label)
+        self.layout.addWidget(self.euro_price_label)
+        self.layout.addWidget(self.dollar_price_label)
 
         # نمایش نسبت قیمت سکه به طلا
         self.coin_to_gold_ratio_label = QLabel("نسبت قیمت سکه به طلا: در حال محاسبه ...")
@@ -93,10 +97,14 @@ class GoldMarketApp(QMainWindow):
         if data:
             gold_price = next(item for item in data["gold"] if item["name"] == "طلای 18 عیار")["price"]
             coin_price = next(item for item in data["gold"] if item["name"] == "سکه امامی")["price"]
+            dollar_price = next(item for item in data["currency"] if item["name"] == "دلار")["price"]
+            euro_price = next(item for item in data["currency"] if item["name"] == "يورو")["price"]
 
             # به‌روزرسانی برچسب‌ها
             self.gold_price_label.setText(f"طلای 18 عیار: {gold_price:,} تومان")
             self.coin_price_label.setText(f"سکه امامی: {coin_price:,} تومان")
+            self.dollar_price_label.setText(f"دلار: {dollar_price:,} تومان")
+            self.euro_price_label.setText(f"يورو: {euro_price:,} تومان")
 
             # پیشنهاد خرید یا فروش بر اساس نسبت قیمت سکه به طلا
             self.suggest_purchase(gold_price, coin_price)
