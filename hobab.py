@@ -1,19 +1,35 @@
 import sys
+import os
 import requests
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QPushButton, QLabel, QWidget, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QTimer
 from plyer import notification
-
+from PyQt5.QtCore import Qt
 
 # API URL
 API_URL = "https://brsapi.ir/FreeTsetmcBourseApi/Api_Free_Gold_Currency_v2.json"
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+icon_path = os.path.join(current_dir, "icon.ico")
+if not os.path.exists(icon_path):
+    print("آیکون وجود ندارد.")
+else:
+    print("آیکون پیدا شد.")
+
 class GoldMarketApp(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        # تنظیم آیکون پنجره اصلی
         self.setWindowTitle("برنامه بررسی قیمت طلا و سکه")
         self.setGeometry(300, 300, 400, 400)  # اندازه پنجره تغییر کرد
+
+        # بررسی و تنظیم آیکون
+        if not os.path.exists(icon_path):
+            print("آیکون وجود ندارد.")
+        else:
+            self.setWindowIcon(QIcon(icon_path))
 
         # تنظیمات اولیه GUI
         self.init_ui()
@@ -24,8 +40,7 @@ class GoldMarketApp(QMainWindow):
         # تایمر برای بررسی خودکار
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_market)
-        self.timer.start(9000000)  
-
+        self.timer.start(9000000)  # چک کردن قیمت‌ها هر 9000000 میلی‌ثانیه (2.5 ساعت)
 
         # اولین بار چک کردن قیمت‌ها
         self.check_market()
@@ -73,7 +88,8 @@ class GoldMarketApp(QMainWindow):
     def init_tray(self):
         """تنظیمات System Tray"""
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(QIcon("icon.png"))  # آیکون دلخواه خود را جایگزین کنید
+        if os.path.exists(icon_path):
+            self.tray_icon.setIcon(QIcon(icon_path))  # آیکون را تنظیم کنید
         self.tray_icon.setVisible(True)
 
         # منوی System Tray
@@ -92,13 +108,23 @@ class GoldMarketApp(QMainWindow):
         self.tray_icon.showMessage("برنامه فعال شد", "برنامه بررسی قیمت طلا و سکه در پس‌زمینه اجرا می‌شود.")
 
     def check_market(self):
-        """دریافت قیمت‌ها از API و به‌روزرسانی رابط کاربری"""
+        """دریافت قیمت‌ها از API و به‌روزرسانی رابط کاربری با مدیریت خطا"""
         data = self.fetch_prices()
-        if data:
-            gold_price = next(item for item in data["gold"] if item["name"] == "طلای 18 عیار")["price"]
-            coin_price = next(item for item in data["gold"] if item["name"] == "سکه امامی")["price"]
-            dollar_price = next(item for item in data["currency"] if item["name"] == "دلار")["price"]
-            euro_price = next(item for item in data["currency"] if item["name"] == "يورو")["price"]
+
+        if not data:
+            self.send_notification("خطا", "عدم دریافت داده از API")
+            return
+
+        try:
+            gold_price = next((item["price"] for item in data.get("gold", []) if item["name"] == "طلای 18 عیار"), None)
+            coin_price = next((item["price"] for item in data.get("gold", []) if item["name"] == "سکه امامی"), None)
+            dollar_price = next((item["price"] for item in data.get("currency", []) if item["name"] == "دلار"), None)
+            euro_price = next((item["price"] for item in data.get("currency", []) if item["name"] == "يورو"), None)
+
+            # بررسی مقدار None برای جلوگیری از خطا
+            if None in (gold_price, coin_price, dollar_price, euro_price):
+                self.send_notification("خطا", "برخی از قیمت‌ها دریافت نشدند!")
+                return
 
             # به‌روزرسانی برچسب‌ها
             self.gold_price_label.setText(f"طلای 18 عیار: {gold_price:,} تومان")
@@ -109,45 +135,54 @@ class GoldMarketApp(QMainWindow):
             # پیشنهاد خرید یا فروش بر اساس نسبت قیمت سکه به طلا
             self.suggest_purchase(gold_price, coin_price)
 
-            # ارسال نوتیفیکیشن
-            self.send_notification("به‌روزرسانی قیمت‌ها", f"طلای 18 عیار: {gold_price:,} تومان\nسکه امامی: {coin_price:,} تومان")
+            # ارسال نوتیفیکیشن شامل قیمت دلار و یورو
+            self.send_notification(
+                "به‌روزرسانی قیمت‌ها",
+                f"طلای 18 عیار: {gold_price:,} تومان\n"
+                f"سکه امامی: {coin_price:,} تومان\n"
+                f"دلار: {dollar_price:,} تومان\n"
+                f"یورو: {euro_price:,} تومان"
+            )
+
+        except Exception as e:
+            self.send_notification("خطا", f"مشکلی پیش آمد: {str(e)}")
 
     def fetch_prices(self):
-       try:
-           response = requests.get(API_URL, timeout=5)
-           response.raise_for_status()
-           return response.json()
-       except requests.exceptions.RequestException as e:
-           print(f"خطا در دریافت داده‌ها: {e}")
-           return None
+        """دریافت قیمت‌ها از API"""
+        try:
+            response = requests.get(API_URL, timeout=5)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"خطا در دریافت داده‌ها: {e}")
+            return None
 
 
     def send_notification(self, title, message):
         """ارسال نوتیفیکیشن"""
         notification.notify(
-            title=title,
+            title=title if title else "اطلاع‌رسانی قیمت طلا",
             message=message,
-            app_name="برنامه حباب",
-            timeout=10
+            timeout=10,  # مدت زمان نوتیفیکیشن
+            app_icon=icon_path  # آیکون نوتیفیکیشن
         )
 
     def suggest_purchase(self, gold_price, coin_price):
-       coin_to_gold_ratio = coin_price / gold_price
-       self.coin_to_gold_ratio_label.setText(f"نسبت قیمت سکه به طلا: {coin_to_gold_ratio:.2f}")
+        """پیشنهاد خرید یا فروش"""
+        coin_to_gold_ratio = coin_price / gold_price
+        self.coin_to_gold_ratio_label.setText(f"نسبت قیمت سکه به طلا: {coin_to_gold_ratio:.2f}")
 
-       middle_ratio = 10.45
-       tolerance = 0.75  # تلورانس
+        middle_ratio = 10.45
+        tolerance = 0.75  # تلورانس
 
-       if coin_to_gold_ratio < middle_ratio - tolerance:  # حباب کم است
-           self.purchase_suggestion_label.setText("پیشنهاد تبدیل طلا به سکه: حباب سکه کم است.")
-           self.send_notification("پیشنهاد تبدیل طلا به سکه", "حباب سکه کم است، پیشنهاد تبدیل طلا به سکه.")
-       
-       elif coin_to_gold_ratio > middle_ratio + tolerance:  # حباب زیاد است
-           self.purchase_suggestion_label.setText("پیشنهاد تبدیل سکه به طلا: حباب سکه زیاد است.")
-           self.send_notification("پیشنهاد تبدیل سکه به طلا", "حباب سکه زیاد است، پیشنهاد تبدیل سکه به طلا.")
-
-       else:
-           self.purchase_suggestion_label.setText("پیشنهاد: هیچ پیشنهاد خاصی در حال حاضر وجود ندارد.")
+        if coin_to_gold_ratio < middle_ratio - tolerance:  # حباب کم است
+            self.purchase_suggestion_label.setText("پیشنهاد تبدیل طلا به سکه: حباب سکه کم است.")
+            self.send_notification("پیشنهاد تبدیل طلا به سکه", "حباب سکه کم است، پیشنهاد تبدیل طلا به سکه.")
+        elif coin_to_gold_ratio > middle_ratio + tolerance:  # حباب زیاد است
+            self.purchase_suggestion_label.setText("پیشنهاد تبدیل سکه به طلا: حباب سکه زیاد است.")
+            self.send_notification("پیشنهاد تبدیل سکه به طلا", "حباب سکه زیاد است، پیشنهاد تبدیل سکه به طلا.")
+        else:
+            self.purchase_suggestion_label.setText("پیشنهاد: هیچ پیشنهاد خاصی در حال حاضر وجود ندارد.")
 
     def close_app(self):
         """خروج از برنامه"""
