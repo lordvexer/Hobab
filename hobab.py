@@ -11,8 +11,24 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 # مسیر API
-API_URL = "https://brsapi.ir/FreeTsetmcBourseApi/Api_Free_Gold_Currency_v2.json"
+API_URL = "https://BrsApi.ir/Api/Market/Gold_Currency.php?key=FreedrDvAEq7OzdTAnANEYby04DiO5dk"
 
+headers = {
+
+        "User-Agent": "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 OPR/106.0.0.0",
+
+        "Accept": "application/json, text/plain, */*"
+
+    }
+response = requests.get(API_URL, headers=headers)
+
+if response.status_code == 200:
+
+   print(response.text)
+
+else:
+
+        print(f"Error: {response.status_code}")
 # تنظیم مسیر آیکون
 current_dir = os.path.dirname(os.path.abspath(__file__))
 icon_path = os.path.join(current_dir, "icon.ico")
